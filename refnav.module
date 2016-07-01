@@ -1,0 +1,105 @@
+<?php
+
+/**
+ * @file Module functions for Referential Navigation
+ * common usage will be to use pathauto pattern tokens
+ *   [node:incoming_references:field_announcements:0:url:path]/[node:title]
+ * for a subnode created with IEF, where "field_announcements" above is the ER field
+ */
+
+/**
+ * Look up to find incoming references to the current entity.
+ *
+ * @param $entity
+ * @param $entity_type eg 'node'.
+ * @param $field_name name of the incoming field.
+ *
+ * @return list of descriptions of incoming reference objects (not fully loaded).
+ *   keys include [entity_type, bundle, entity_id, revision_id, delta]
+ */
+function refnav_reverse_lookup($entity, $entity_type, $field_name) {
+  $incoming_references = array();
+  $field = field_info_field($field_name);
+  // There is sure to be an API way to do this, but?
+  // Use parts of the API to find the DB table that I should be looking into.
+  // Gah - get views to do it or what?
+  foreach ($field['bundles'] as $entity_type => $bundles) {
+    $target_entity_info = entity_get_info($field['settings']['target_type']);
+    if (isset($target_entity_info['base table'])) {
+
+      // The parent/referring thing is a:
+      $entity_info = entity_get_info($entity_type);
+      // The child/referred thing is a:
+      $target_entity = $target_entity_info['label'];
+      // eg 'nid';
+      $target_id_key = $target_entity_info['entity keys']['id'];
+      $target_id = $entity->$target_id_key;
+
+      // Figured this stuff out by inspecting entityreference_field_views_data()
+      // TODO - join to the base field and find the appropriate revisions!
+      $base = $entity_info['base table'];
+      $base_field = $entity_info['entity keys']['id'];
+
+      $field_data_table = _field_sql_storage_tablename($field);
+      $target_id_column = $field['field_name'] . '_target_id';
+      $result = db_select($field_data_table, 'ref')->fields('ref', array('entity_type', 'bundle', 'entity_id', 'revision_id', 'delta'))->condition($target_id_column, array($target_id))->execute();
+      if (!empty($result)) {
+        foreach ($result as $record) {
+          $incoming_references[] = $record;
+        }
+      }
+    }
+  }
+  return $incoming_references;
+}
+
+/**
+ * Borrowed from content_dependency, as field API doesn't have this
+ *
+ * @see getReferenceFieldsArray()
+ *
+ * @returns a list of field definitions of the requested type.
+ */
+function get_fields_by_type($field_type) {
+  #->join('field_config_instance', 'fi', 'fc.field_name = fi.field_name')
+  $result = db_select('field_config', 'fc')->fields('fc', array('field_name', 'type'))->condition('type', $field_type)
+  #->fields('fi', array('field_name', 'type'))
+  ->execute();
+
+  $field_array = array();
+  if (!empty($result)) {
+    foreach ($result as $record) {
+      if (!empty($record->field_name) && !empty($record->type)) {
+        $field_array[$record->field_name] = field_info_field($record->field_name);
+      }
+    }
+  }
+
+  return $field_array;
+}
+
+/**
+ * run through and resave referenced nodes when parent form is saved
+ * @param  [type] $node [description]
+ * @return [type]       [description]
+ */
+function refnav_node_update($node) {
+  $keys = array_keys(get_object_vars($node));
+  module_load_include('inc', 'pathauto');
+
+  foreach ($keys as $key) {
+    if (strpos($key, 'field_') === 0) {
+      $field = $node->$key;
+      if (isset($field[LANGUAGE_NONE][0]['target_id'])) {
+        foreach($field[LANGUAGE_NONE] as $delta) {
+          $sub = node_load($delta['target_id']);
+          $path = pathauto_node_update_alias($sub, 'update');
+          if (!empty($path)) {
+            path_save($path);
+          }
+        }
+      }
+    }
+  }
+}
+

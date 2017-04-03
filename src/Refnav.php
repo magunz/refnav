@@ -3,53 +3,46 @@
 namespace Drupal\refnav;
 
 use Drupal\field\Entity\FieldStorageConfig;
+use Drupal\Core\Entity\Query\QueryFactory;
+use Drupal\Core\Entity\EntityTypeManager;
+use Drupal\Core\Entity\EntityFieldManager;
 
 class Refnav {
     /**
-    * Look up to find incoming references to the current entity.
+    *
+    * @param \Drupal\Core\Entity\Query\QueryFactory $entity_query
+    *   Entity Field Query.
+    * @param \Drupal\Core\Entity\EntityTypeManager $entity_type_manager
+    *   Entity Type Manager.
+    * @param \Drupal\Core\Entity\EntityFieldManager $entity_field_manager
+    *   Entity Field Manager.
+    */
+    public function __construct(QueryFactory $entity_query, EntityTypeManager $entity_type_manager, EntityFieldManager $entity_field_manager) {
+        $this->entityQuery = $entity_query;
+        $this->entityTypeManager = $entity_type_manager;
+        $this->entityFieldManager = $entity_field_manager;
+    }
+
+    /**
+    * Look up to find incoming (arbitrary parent) references to the current entity.
+    * borrows ideas and concepts from https://gist.github.com/grayside/a7b8aba74ccf36ff984b0b9499b3a188
     *
     * @param $entity
     * @param $entity_type eg 'node'.
     * @param $field_name name of the incoming field.
     *
-    * @return list of descriptions of incoming reference objects (not fully loaded).
-    *   keys include [entity_type, bundle, entity_id, revision_id, delta]
+    * @return list of incoming reference objects 
     */
-    static function refnav_reverse_lookup($entity, $entity_type, $field_name) {
-        $incoming_references = [];
+    function reverse_lookup($entity, $entity_type, $field_name) {
         $field = FieldStorageConfig::loadByName($entity_type, $field_name);
-        // There is sure to be an API way to do this, but?
-        // Use parts of the API to find the DB table that I should be looking into.
-        // Gah - get views to do it or what?
-        foreach ($field->bundles as $entity_type => $bundles) {
-            $target_entity_info = Drupal::entityTypeManager()->getDefinition($field['settings']['target_type']);
-            if (isset($target_entity_info['base table'])) {
-                // The parent/referring thing is a:
-                $entity_info = Drupal::entityTypeManager()->getDefinition($entity_type);
-                // The child/referred thing is a:
-                $target_entity = $target_entity_info['label'];
-                // eg 'nid';
-                $target_id_key = $target_entity_info['entity keys']['id'];
-                $target_id = $entity->$target_id_key;
+        $target_id = $entity->id();
 
-                // Figured this stuff out by inspecting entityreference_field_views_data()
-                // TODO - join to the base field and find the appropriate revisions!
-                $base = $entity_info['base table'];
-                $base_field = $entity_info['entity keys']['id'];
-
-                $field_data_table = _field_sql_storage_tablename($field);
-                $target_id_column = $field['field_name'] . '_target_id';
-                $result = \Drupal::database()->select($field_data_table, 'ref')
-                    ->fields('ref', ['entity_type', 'bundle', 'entity_id', 'revision_id', 'delta'])
-                    ->condition($target_id_column, [$target_id])
-                    ->execute();
-                if (!empty($result)) {
-                    foreach ($result as $record) {
-                        $incoming_references[] = $record;
-                    }
-                }
-            }
-        }
-        return $incoming_references;
+        $query = $this->entityQuery->get($field->getTargetEntityTypeId(), 'AND')
+            ->condition($field->getName(), $target_id)
+            ->condition('status', 1)
+            ->addTag('node_access');
+        $ids = $query->execute();
+        return $this->entityTypeManager->getStorage($field->getTargetEntityTypeId())
+            ->loadMultiple($ids);
     }
 }

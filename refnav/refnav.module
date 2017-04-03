@@ -1,9 +1,39 @@
 <?php
 
+use Drupal\refnav\Refnav;
+use Drupal\node\Entity\Node;
+use Drupal\Core\Entity\EntityFieldManager;
+use Drupal\Core\Render\BubbleableMetadata;
+
 /**
- * @file
- * Token callbacks for the refnav module.
+ * @file Module functions for Referential Navigation
+ * common usage will be to use pathauto pattern tokens
+ *   [node:incoming_references:field_announcements:0:url:path]/[node:title]
+ * for a subnode created with IEF, where "field_announcements" above is the ER field
  */
+
+/**
+ * Implements hook_node_update()
+ */
+function refnav_node_update($node) {
+  module_load_include('inc', 'pathauto');
+  
+  $fields = $node->getFieldDefinitions();
+
+  foreach ($fields as $field) {
+    if (isset($field->target_id)) {
+      foreach($field as $delta) {
+        $child = Node::load($delta->target_id);
+        if ($child) {
+          $path = pathauto_node_update_alias($child, 'update');
+          if (!empty($path)) {
+            path_save($path);
+          }
+        }
+      }
+    }
+  }
+}
 
 /**
  * Implements hook_token_info().
@@ -11,56 +41,54 @@
 function refnav_token_info() {
   // Build our own compound field type, as the values we look for
   // are selected by field name
-  $type = array(
+  $type = [
     'name' => t('Incoming references'),
     'description' => t('Tokens from reverse entityreferences.'),
     'needs-data' => 'incoming_references',
-  );
-  $incoming_references = array();
+  ];
+  $incoming_references = [];
 
   // For each entityreference in the system, advertise a new token branch.
-  $entityreference_fields = get_fields_by_type('entityreference');
-  foreach ($entityreference_fields as $field_id => $field_def) {
-    // Figure what type of entity has this field. Almost always 'node'.
-    $entity_types = array_keys($field_def['bundles']);
-    $entity_type = reset($entity_types);
-    // THis will define what sort of stuff is available when expanding
-    // the deeper token chain.
-    $incoming_references[$field_id] = array(
-      'name' => $field_def['field_name'],
-      'description' => t('Entity referencing this one through field %field_label', array('%field_label' => $field_def['field_name'])),
-      'dynamic' => TRUE,
-      'type' => $entity_type,
-    );
+  $map = \Drupal::service('entity_field.manager')->getFieldMapByFieldType('entity_reference');
+
+  foreach ($map as $entity_type => $fields) {
+    foreach ($fields as $field_id => $field_def) {
+      // This will define what sort of stuff is available when expanding
+      // the deeper token chain.
+      $incoming_references[$field_id] = [
+        'name' => $field_id,
+        'description' => t('Entity referencing this one through field %field_label', ['%field_label' => $field_id]),
+        'dynamic' => TRUE,
+        'type' => $entity_type,
+      ];
+    }
   }
 
-  $node = array(
-    'incoming_references' => array(
+  $node = [
+    'incoming_references' => [
       'name' => t('Incoming references'),
       'description' => t("Entities that reference this one. (If there are multiple references, [?] is the iteration, starting with 0)"),
       'type' => 'incoming_references',
-    ),
-  );
-  $user = array(
-    'incoming_references' => array(
+    ],
+  ];
+  $user = [
+    'incoming_references' => [
       'name' => t('Incoming references'),
       'description' => t("Entities that reference this one. (If there are multiple references, [?] is the iteration, starting with 0)"),
       'type' => 'incoming_references',
-    ),
-  );
+    ],
+  ];
 
-  return array(
-    'types' => array(
+  return [
+    'types' => [
       'incoming_references' => $type,
-    ),
-    'tokens' => array(
+    ],
+    'tokens' => [
       'incoming_references' => $incoming_references,
       'user' => $user,
       'node' => $node,
-    ),
-  );
-
-  return $info;
+    ],
+  ];
 }
 
 /**
@@ -72,12 +100,12 @@ function refnav_token_info() {
  * referring node.
  * [node:incoming_references:field_link_to_children:0:url:path]
  */
-function refnav_tokens($type, $tokens, array$data = array(), array$options = array()) {
-  $replacements = array();
-  if ($type == 'entity' && ($refnav_tokens = token_find_with_prefix($tokens, 'incoming_references'))) {
+function refnav_tokens($type, $tokens, array $data, array $options, BubbleableMetadata $bubbleable_metadata) {
+  $replacements = [];
+  if ($type == 'entity' && ($refnav_tokens = \Drupal::token()->findWithPrefix($tokens, 'incoming_references'))) {
     // Just pass the whole data context through to the lookup.
     // All the work is done in there.
-    $replacements += token_generate('incoming_references', $refnav_tokens, $data, $options);
+    $replacements += \Drupal::token()->generate('incoming_references', $refnav_tokens, $data, $options, $bubbleable_metadata);
   }
   elseif ($type == 'incoming_references' && isset($data['entity'])) {
     // An entity has asked for us to generate tokens for incoming refs.
@@ -88,19 +116,20 @@ function refnav_tokens($type, $tokens, array$data = array(), array$options = arr
     // tokens for us.
 
     $token_keys = array_keys($tokens);
-    $field_name = reset($token_keys);
-    // Did something change? the field name is still messy with suffixes.
-    list($field_name) = explode(':', $field_name);
+    $field_name = array_shift($token_keys);
+    // clean off the suffixes
+    $field_name = array_shift(explode(':', $field_name));
 
     // Find the incoming entities, then ask THEM for their values.
     // We already know the delta we want, so may as well get the lookup to sort
     // that out for us.?
-    $referees = refnav_reverse_lookup($data['entity'], $data['entity_type'], $field_name);
+    $referees = array_values(\Drupal::service('refnav')->reverse_lookup($data['entity'], $data['entity_type'], $field_name));
+
     // $referees will be a 0-indexed list
     // We expect to be given a numeric index to look for..
 
     // Remove the current prefix from the list of tokens. Localize it.
-    $localized_tokens = token_find_with_prefix($tokens, $field_name);
+    $localized_tokens = \Drupal::token()->findWithPrefix($tokens, $field_name);
 
     // Looks like I need to deal with array deltas myself?
     // Token should have something built in for this but I can't see how to
@@ -111,25 +140,22 @@ function refnav_tokens($type, $tokens, array$data = array(), array$options = arr
       list($delta, $inner_token) = explode(':', $local_token, 2);
       if (is_numeric($delta) && isset($referees[$delta])) {
         // Found the indexed entity!
-        $referrer_info = $referees[$delta];
-        // Bloody multiples from entity_load() are boring.
-        $loaded_entities = entity_load($referrer_info->entity_type, array($referrer_info->entity_id));
-        $loaded_entity = reset($loaded_entities);
+        $loaded_entity = $referees[$delta];
 
         // We know the referrers $entity_type to generate deeper tokens for now.
-        $entity_type = $referrer_info->entity_type;
+        $entity_type = $loaded_entity->getEntityTypeId();
         // This is almost always just $entity_type='node', but don't assume.
         // Build a data array that either node_tokens or entity_tokens can use
         // to do their thing.
-        $deeper_data = array(
+        $deeper_data = [
           'entity_type' => $entity_type,
           'entity' => $loaded_entity,
           $entity_type => $loaded_entity,
           'token_type' => $entity_type,
-        );
+        ];
         // Get each of these higher entities to generate whatever tokens we ask of them.
-        $deeper_tokens = token_find_with_prefix($localized_tokens, $delta);
-        $replacements += token_generate($entity_type, $deeper_tokens, $deeper_data, $options);
+        $deeper_tokens = \Drupal::token()->findWithPrefix($localized_tokens, $delta);
+        $replacements += \Drupal::token()->generate($entity_type, $deeper_tokens, $deeper_data, $options, $bubbleable_metadata);
       }
     }
   }

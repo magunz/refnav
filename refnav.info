@@ -1,6 +1,0 @@
-name = Referential Navigation
-description = Supports pathauto tokens, breadcrumbs and structural effects for a navigation heirarchy built from EntityReference.
-package = Sparks
-core = 7.x
-dependencies[] = entityreference
-dependencies[] = token

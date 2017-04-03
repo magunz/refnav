@@ -1,0 +1,5 @@
+{
+   "name": "drupal/refnav",
+   "type": "drupal-module",
+   "description": "Entity backreference tokens (for pathauto)"
+}

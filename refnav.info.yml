@@ -1,0 +1,8 @@
+name: Referential Navigation
+type: module
+description: Tokens for entity backreference hierarchies
+package: Other
+core: 8.x
+dependencies:
+  - drupal:token
+  - drupal:pathauto

@@ -1,8 +1,5 @@
 <?php
 
-use Drupal\refnav\Refnav;
-use Drupal\node\Entity\Node;
-use Drupal\Core\Entity\EntityFieldManager;
 use Drupal\Core\Render\BubbleableMetadata;
 
 /**
@@ -13,26 +10,10 @@ use Drupal\Core\Render\BubbleableMetadata;
  */
 
 /**
- * Implements hook_node_update()
+ * Implements hook_entity_update()
  */
-function refnav_node_update($node) {
-  module_load_include('inc', 'pathauto');
-  
-  $fields = $node->getFieldDefinitions();
-
-  foreach ($fields as $field) {
-    if (isset($field->target_id)) {
-      foreach($field as $delta) {
-        $child = Node::load($delta->target_id);
-        if ($child) {
-          $path = pathauto_node_update_alias($child, 'update');
-          if (!empty($path)) {
-            path_save($path);
-          }
-        }
-      }
-    }
-  }
+function refnav_entity_update($entity) {
+  \Drupal::service('refnav.pathauto')->updateChildAliases($entity);
 }
 
 /**
@@ -123,7 +104,7 @@ function refnav_tokens($type, $tokens, array $data, array $options, BubbleableMe
     // Find the incoming entities, then ask THEM for their values.
     // We already know the delta we want, so may as well get the lookup to sort
     // that out for us.?
-    $referees = array_values(\Drupal::service('refnav')->reverse_lookup($data['entity'], $data['entity_type'], $field_name));
+    $referees = array_values(\Drupal::service('refnav.lookup')->reverseLookup($data['entity'], $data['entity_type'], $field_name));
 
     // $referees will be a 0-indexed list
     // We expect to be given a numeric index to look for..

@@ -7,7 +7,7 @@ use Drupal\Core\Entity\Query\QueryFactory;
 use Drupal\Core\Entity\EntityTypeManager;
 use Drupal\Core\Entity\EntityFieldManager;
 
-class Refnav {
+class RefnavLookup {
     /**
     *
     * @param \Drupal\Core\Entity\Query\QueryFactory $entity_query
@@ -33,7 +33,7 @@ class Refnav {
     *
     * @return list of incoming reference objects 
     */
-    function reverse_lookup($entity, $entity_type, $field_name) {
+    function reverseLookup($entity, $entity_type, $field_name) {
         $field = FieldStorageConfig::loadByName($entity_type, $field_name);
         $target_id = $entity->id();
 

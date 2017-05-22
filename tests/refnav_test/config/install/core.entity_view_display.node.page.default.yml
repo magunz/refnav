@@ -1,0 +1,27 @@
+uuid: cdcce2b7-0b8c-4da5-ab98-b6ffabd22e78
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.field.node.page.field_articles
+    - node.type.page
+  module:
+    - user
+_core:
+  default_config_hash: g1S3_GLaxq4l3I9RIca5Mlz02MxI2KmOquZpHw59akM
+id: node.page.default
+targetEntityType: node
+bundle: page
+mode: default
+content:
+  field_articles:
+    type: entity_reference_label
+    weight: 0
+    region: content
+    label: above
+    settings:
+      link: true
+    third_party_settings: {  }
+hidden:
+  body: true
+  links: true

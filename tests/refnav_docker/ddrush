@@ -1,0 +1,2 @@
+#!/bin/bash
+docker exec -i refnav_module_testing vendor/drush/drush/drush "$@"

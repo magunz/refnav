@@ -99,7 +99,8 @@ function refnav_tokens($type, $tokens, array $data, array $options, BubbleableMe
     $token_keys = array_keys($tokens);
     $field_name = array_shift($token_keys);
     // clean off the suffixes
-    $field_name = array_shift(explode(':', $field_name));
+    $field_name_parts = explode(':', $field_name);
+    $field_name = array_shift($field_name_parts);
 
     // Find the incoming entities, then ask THEM for their values.
     // We already know the delta we want, so may as well get the lookup to sort

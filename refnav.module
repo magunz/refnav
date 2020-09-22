@@ -3,14 +3,13 @@
 use Drupal\Core\Render\BubbleableMetadata;
 
 /**
- * @file Module functions for Referential Navigation
- * common usage will be to use pathauto pattern tokens
+ * Common usage will be to use pathauto pattern tokens
  *   [node:incoming_references:field_announcements:0:url:path]/[node:title]
- * for a subnode created with IEF, where "field_announcements" above is the ER field
+ * for a subnode created with IEF, where "field_announcements" above is the ER field.
  */
 
 /**
- * Implements hook_entity_update()
+ * Implements hook_entity_update().
  */
 function refnav_entity_update($entity) {
   \Drupal::service('refnav.pathauto')->updateChildAliases($entity);
@@ -21,7 +20,7 @@ function refnav_entity_update($entity) {
  */
 function refnav_token_info() {
   // Build our own compound field type, as the values we look for
-  // are selected by field name
+  // are selected by field name.
   $type = [
     'name' => t('Incoming references'),
     'description' => t('Tokens from reverse entityreferences.'),
@@ -95,10 +94,9 @@ function refnav_tokens($type, $tokens, array $data, array $options, BubbleableMe
     // or url.
     // We fetch our data, then get the thing we fetched to resolve its own
     // tokens for us.
-
     $token_keys = array_keys($tokens);
     $field_name = array_shift($token_keys);
-    // clean off the suffixes
+    // Clean off the suffixes.
     $field_name_parts = explode(':', $field_name);
     $field_name = array_shift($field_name_parts);
 
@@ -109,14 +107,12 @@ function refnav_tokens($type, $tokens, array $data, array $options, BubbleableMe
 
     // $referees will be a 0-indexed list
     // We expect to be given a numeric index to look for..
-
     // Remove the current prefix from the list of tokens. Localize it.
     $localized_tokens = \Drupal::token()->findWithPrefix($tokens, $field_name);
 
     // Looks like I need to deal with array deltas myself?
     // Token should have something built in for this but I can't see how to
     // trigger it. Token API has traces of 'first' 'last' keys etc?
-
     // In our uses, this is almost always 0, but lets try to support deltas.
     foreach ($localized_tokens as $local_token => $original) {
       list($delta, $inner_token) = explode(':', $local_token, 2);
@@ -135,7 +131,8 @@ function refnav_tokens($type, $tokens, array $data, array $options, BubbleableMe
           $entity_type => $loaded_entity,
           'token_type' => $entity_type,
         ];
-        // Get each of these higher entities to generate whatever tokens we ask of them.
+        // Get each of these higher entities to generate whatever tokens
+        // we ask of them.
         $deeper_tokens = \Drupal::token()->findWithPrefix($localized_tokens, $delta);
         $replacements += \Drupal::token()->generate($entity_type, $deeper_tokens, $deeper_data, $options, $bubbleable_metadata);
       }
@@ -143,4 +140,3 @@ function refnav_tokens($type, $tokens, array $data, array $options, BubbleableMe
   }
   return $replacements;
 }
-

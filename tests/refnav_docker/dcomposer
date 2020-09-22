@@ -1,2 +1,0 @@
-#!/bin/bash
-docker exec -it refnav_module_testing composer "$@"

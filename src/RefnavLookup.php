@@ -31,9 +31,8 @@ class RefnavLookup {
     $target_id = $entity->id();
     $storage = $this->entityTypeManager->getStorage($field->getTargetEntityTypeId());
 
-    $query = $storage->getQuery()->get($field->getTargetEntityTypeId(), 'AND')
+    $query = $storage->getQuery($field->getTargetEntityTypeId(), 'AND')
       ->condition($field->getName(), $target_id)
-      ->condition('status', 1)
       ->addTag('node_access');
     $ids = $query->execute();
     return $storage
